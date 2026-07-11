@@ -1,0 +1,12 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/change-model" },
+    { "path": "packages/config" },
+    { "path": "packages/markdown-core" },
+    { "path": "packages/git-provider" },
+    { "path": "packages/github-provider" },
+    { "path": "packages/agent-runtime" },
+    { "path": "apps/api" }
+  ]
+}

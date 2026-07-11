@@ -1,0 +1,24 @@
+services:
+  agentdocs:
+    build: .
+    ports:
+      - "${PORT:-4100}:4100"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      HOST: 0.0.0.0
+      PORT: 4100
+      AGENTDOCS_DATA_DIR: /app/data
+      AGENTDOCS_ALLOWED_REPOSITORY_ROOTS: /repositories
+    volumes:
+      - agentdocs-data:/app/data
+      - "${AGENTDOCS_REPOSITORIES_PATH:-.}:/repositories:rw"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4100/health').then(r=>{if(!r.ok)process.exit(1)})"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  agentdocs-data:

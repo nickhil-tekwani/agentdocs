@@ -1,0 +1,9 @@
+{
+  "name": "@agentdocs/git-provider",
+  "version": "0.1.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": { "build": "tsc -b", "typecheck": "tsc -b --pretty false" },
+  "dependencies": { "@agentdocs/change-model": "0.1.0", "diff": "5.2.2" },
+  "devDependencies": { "@types/diff": "5.2.1" }
+}

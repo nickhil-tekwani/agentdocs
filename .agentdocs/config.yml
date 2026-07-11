@@ -1,0 +1,17 @@
+version: 1
+docs_roots:
+  - .
+default_write_mode: pull_request
+agents:
+  context_roots:
+    - packages
+    - apps
+  external_web: false
+policies:
+  require_evidence: true
+  max_files_per_change: 20
+  protected_paths:
+    - LICENSE
+templates:
+  rfc: .agentdocs/templates/rfc.md
+  runbook: .agentdocs/templates/runbook.md

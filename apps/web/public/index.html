@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>AgentDocs</title><link rel="stylesheet" href="/styles.css" /></head>
+  <body><main>
+    <header><span class="eyebrow">Git-native documentation</span><h1>AgentDocs</h1><p>Ground an intent in repository evidence, then review the exact patch before anything changes.</p></header>
+    <section class="card connect"><label>Local repository path<input id="repository" placeholder="/path/to/repository" /></label><button id="connect">Connect repository</button></section>
+    <div id="workspace" class="workspace hidden"><aside class="card"><h2>Documents</h2><nav id="files"></nav></aside><section class="card composer"><h2>Propose a change</h2><label>Intent<textarea id="intent">Improve the project overview</textarea></label><label>Section heading<input id="instruction" value="Proposed update" /></label><button id="propose">Run agent</button></section></div>
+    <section id="review" class="card review hidden"><div><span class="eyebrow">Ready for review</span><h2>Evidence and run</h2><div id="events"></div><p id="evidence"></p><p id="validation"></p><p id="warning" class="warning"></p><div class="publish"><label>Branch<input id="branch" value="agentdocs/documentation-update" /></label><label>Commit message<input id="message" value="Update documentation" /></label><button id="publish">Publish approved proposal</button><p id="published"></p></div></div><div><h2>Unified diff</h2><pre id="diff"></pre></div></section>
+    <p id="error" class="error"></p>
+  </main><script src="/app.js"></script></body>
+</html>

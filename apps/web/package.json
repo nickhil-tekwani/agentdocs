@@ -1,0 +1,6 @@
+{
+  "name": "@agentdocs/web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": { "build": "node build.js", "typecheck": "node -e \"process.exit(0)\"" }
+}

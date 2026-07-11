@@ -1,0 +1,8 @@
+{
+  "name": "@agentdocs/config",
+  "version": "0.1.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": { "build": "tsc -b", "typecheck": "tsc -b --pretty false" },
+  "dependencies": { "dotenv": "16.6.1", "yaml": "2.9.0", "zod": "3.23.8" }
+}

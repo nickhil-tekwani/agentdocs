@@ -1,0 +1,22 @@
+{
+  "name": "agentdocs",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Agent-first, Git-native documentation workspace",
+  "license": "Apache-2.0",
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "dev": "npm run dev --workspace @agentdocs/api",
+    "dev:web": "npm run dev --workspace @agentdocs/web",
+    "env:check": "npm run build --workspace @agentdocs/config && node -e \"require('./packages/config/dist').loadEnvironment(); console.log('Environment configuration is valid')\"",
+    "test": "npm run typecheck && node --test packages/agent-runtime/dist/index.test.js packages/change-model/dist/index.test.js packages/config/dist/index.test.js packages/github-provider/dist/index.test.js packages/markdown-core/dist/index.test.js apps/api/dist/app.test.js",
+    "typecheck": "tsc --build --pretty false",
+    "check": "npm run typecheck && npm test && npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "20.19.9",
+    "typescript": "4.9.5"
+  },
+  "engines": { "node": ">=20" }
+}
