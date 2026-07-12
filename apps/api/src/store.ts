@@ -11,7 +11,7 @@ export interface StoredWorkspace {
   baseSha: string;
   createdAt: string;
   config: RepositoryConfig;
-  proposals: Record<string, { proposal: ChangeProposal; events: RunEvent[]; diff: string; createdAt: string; published?: { commitSha: string; branch: string }; pullRequest?: { number: number; url: string } }>;
+  proposals: Record<string, { proposal: ChangeProposal; events: RunEvent[]; diff: string; createdAt: string; published?: { commitSha: string; branch: string; pushed: boolean; rebasedOnto?: string }; pullRequest?: { number: number; url: string } }>;
 }
 
 export class JsonWorkspaceStore {

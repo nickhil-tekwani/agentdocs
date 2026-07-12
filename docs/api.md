@@ -35,20 +35,28 @@ GET /v1/workspaces/{id}/files/{path}
 
 Only Markdown/MDX files within configured documentation roots appear in the tree.
 
-## Propose
+## Edit or propose
 
 ```http
-POST /v1/workspaces/{id}/agent-runs
+PUT /v1/workspaces/{id}/files/README.md
 Content-Type: application/json
 
 {
   "intent": "Explain local installation",
-  "targetPath": "README.md",
-  "instruction": "Add a concise installation section"
+  "content": "# Complete replacement Markdown"
 }
 ```
 
-The response contains the typed proposal, staged run events, evidence, validation results, warnings, and unified diff. Proposals are persisted but do not mutate Git.
+The manual UI uses this route. External AI clients can instead submit one or more typed create/modify/delete operations with optional evidence:
+
+```http
+POST /v1/workspaces/{id}/proposals
+Content-Type: application/json
+
+{"intent":"Update the guide","operations":[{"type":"modify","path":"README.md","content":"# Updated"}]}
+```
+
+Responses contain the typed proposal, validation results, warnings, and unified diff. Proposals are persisted but do not mutate Git.
 
 ```text
 GET /v1/workspaces/{id}/proposals
@@ -64,11 +72,13 @@ Content-Type: application/json
 {
   "proposalId": "<uuid>",
   "message": "Document local installation",
-  "branch": "agentdocs/local-installation"
+  "branch": "agentdocs/local-installation",
+  "autoPush": true,
+  "targetBranch": "main"
 }
 ```
 
-Every validation must pass. Publication rejects stale base SHAs, duplicate publication, unsafe branch names, and dirty local worktrees. It always creates a new branch and never force-pushes.
+Every validation must pass. Local publication creates an isolated worktree, commits, fetches, rebases onto the remote target, and pushes the new branch. Non-overlapping GitHub API proposals are automatically replayed onto the latest target SHA; overlapping files return a conflict for explicit resolution. AgentDocs never force-pushes.
 
 For GitHub workspaces only:
 
@@ -85,4 +95,4 @@ Content-Type: application/json
 
 ## Operations
 
-`GET /health` checks persistent storage and reports the active model-provider kind. Workspace JSON files are created with owner-only permissions under `AGENTDOCS_DATA_DIR`.
+`GET /health` checks persistent storage. Workspace JSON files are created with owner-only permissions under `AGENTDOCS_DATA_DIR`.

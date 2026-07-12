@@ -14,17 +14,9 @@ AgentDocs reads local settings from environment variables and repository policy 
 | `AGENTDOCS_GIT_AUTHOR_EMAIL` | No | Author/committer email for published local commits. |
 | `AGENTDOCS_SESSION_SECRET` | Hosted only | Reserved for authenticated multi-user sessions. Generate at least 32 random bytes before exposing the service. |
 
-## OpenAI provider
+## AI clients
 
-Set both variables to replace the deterministic development provider with the Responses API provider:
-
-| Variable | Required together | Purpose |
-| --- | --- | --- |
-| `OPENAI_API_KEY` | Yes | Server-side API credential. Never expose it to the browser or commit it. |
-| `OPENAI_MODEL` | Yes | Explicit model ID selected by the operator. No model is silently chosen by AgentDocs. |
-| `OPENAI_BASE_URL` | No | Responses-compatible API base; defaults to `https://api.openai.com/v1`. |
-
-The provider requests strict JSON-schema output containing the complete replacement Markdown. Repository content is placed in user input and explicitly treated as untrusted reference data. The API key remains in the server process.
+AgentDocs has no AI-provider environment variables. The user's existing AI client reads `AGENTS.md`, `SKILLS.md`, and `skills/agentdocs-repository/SKILL.md`, edits repository files directly or submits typed proposals, and uses the AgentDocs CLI to validate and publish. This keeps model choice, billing, privacy, and context entirely in the user's chosen tool.
 
 ## GitHub App
 

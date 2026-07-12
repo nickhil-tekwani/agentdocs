@@ -7,6 +7,7 @@
     { "path": "packages/git-provider" },
     { "path": "packages/github-provider" },
     { "path": "packages/agent-runtime" },
-    { "path": "apps/api" }
+    { "path": "apps/api" },
+    { "path": "apps/cli" }
   ]
 }

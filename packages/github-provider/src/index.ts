@@ -1,7 +1,7 @@
 import { createSign } from "node:crypto";
 import { createTwoFilesPatch } from "diff";
 import type { ChangeProposal, FileOperation } from "@agentdocs/change-model";
-import type { GitProvider, PublishResult, RepositoryFile } from "@agentdocs/git-provider";
+import type { GitProvider, PublishOptions, PublishResult, RepositoryFile } from "@agentdocs/git-provider";
 
 interface GitHubOptions { owner: string; repository: string; token: () => Promise<string>; defaultBranch?: string; apiUrl?: string; }
 
@@ -24,18 +24,25 @@ export class GitHubGitProvider implements GitProvider {
   private async previous(operation: FileOperation, sha: string) { if (operation.type === "create") return ""; try { return (await this.readFile(operation.path, sha)).content; } catch { return ""; } }
   async diff(proposal: ChangeProposal): Promise<string> { return (await Promise.all(proposal.operations.map(async (operation) => createTwoFilesPatch(`a/${operation.path}`, `b/${operation.path}`, await this.previous(operation, proposal.baseSha), operation.type === "delete" ? "" : operation.content, proposal.baseSha, "proposal", { context: 3 })))).join("\n"); }
 
-  async publish(proposal: ChangeProposal, message: string, branch = "agentdocs/change"): Promise<PublishResult> {
+  async publish(proposal: ChangeProposal, message: string, branch = "agentdocs/change", _options: PublishOptions = {}): Promise<PublishResult> {
     const currentHead = await this.head(this.defaultBranch);
-    if (currentHead !== proposal.baseSha) throw new Error(`Stale proposal: expected ${proposal.baseSha}, repository is ${currentHead}`);
+    let effectiveBase = proposal.baseSha;
+    if (currentHead !== proposal.baseSha) {
+      const comparison = await this.request<{ files?: Array<{ filename: string }> }>(this.repo(`/compare/${proposal.baseSha}...${currentHead}`));
+      const changed = new Set((comparison.files ?? []).map((file) => file.filename));
+      const overlap = proposal.operations.find((operation) => changed.has(operation.path));
+      if (overlap) throw Object.assign(new Error(`Automatic rebase conflict: ${overlap.path} changed upstream`), { status: 409 });
+      effectiveBase = currentHead;
+    }
     const blobs = new Map<string, string>();
     for (const operation of proposal.operations) if (operation.type !== "delete") {
       const blob = await this.request<{ sha: string }>(this.repo("/git/blobs"), { method: "POST", body: JSON.stringify({ content: operation.content, encoding: "utf-8" }) });
       blobs.set(operation.path, blob.sha);
     }
-    const tree = await this.request<{ sha: string }>(this.repo("/git/trees"), { method: "POST", body: JSON.stringify({ base_tree: proposal.baseSha, tree: proposal.operations.map((operation) => ({ path: operation.path, mode: "100644", type: "blob", sha: operation.type === "delete" ? null : blobs.get(operation.path) })) }) });
-    const commit = await this.request<{ sha: string }>(this.repo("/git/commits"), { method: "POST", body: JSON.stringify({ message, tree: tree.sha, parents: [proposal.baseSha] }) });
+    const tree = await this.request<{ sha: string }>(this.repo("/git/trees"), { method: "POST", body: JSON.stringify({ base_tree: effectiveBase, tree: proposal.operations.map((operation) => ({ path: operation.path, mode: "100644", type: "blob", sha: operation.type === "delete" ? null : blobs.get(operation.path) })) }) });
+    const commit = await this.request<{ sha: string }>(this.repo("/git/commits"), { method: "POST", body: JSON.stringify({ message, tree: tree.sha, parents: [effectiveBase] }) });
     await this.request(this.repo("/git/refs"), { method: "POST", body: JSON.stringify({ ref: `refs/heads/${branch}`, sha: commit.sha }) });
-    return { commitSha: commit.sha, branch };
+    return { commitSha: commit.sha, branch, pushed: true, rebasedOnto: effectiveBase !== proposal.baseSha ? `${this.defaultBranch}@${effectiveBase}` : undefined };
   }
 
   async openPullRequest(branch: string, title: string, body: string, base = this.defaultBranch): Promise<{ number: number; url: string }> {

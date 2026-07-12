@@ -37,13 +37,17 @@ describe("AgentDocs API", () => {
     const tree = await json(`${origin}/v1/workspaces/${workspace.id}/tree`);
     assert.deepEqual(tree.files, ["README.md"]);
 
-    const record = await json(`${origin}/v1/workspaces/${workspace.id}/agent-runs`, { method: "POST", body: { intent: "Add setup notes", targetPath: "README.md", instruction: "Setup" } });
+    const noOp = await fetch(`${origin}/v1/workspaces/${workspace.id}/files/README.md`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ intent: "No-op", content: "# Test repository\n" }) });
+    assert.equal(noOp.status, 400);
+
+    const record = await json(`${origin}/v1/workspaces/${workspace.id}/files/README.md`, { method: "PUT", body: { intent: "Add setup notes", content: "# Test repository\n\n## Setup\n\nRun the service.\n" } });
     assert.equal(record.proposal.validation.markdown, "passed");
     assert.equal(record.proposal.validation.links, "passed");
-    assert.match(record.diff, /Draft generated for review/);
+    assert.match(record.diff, /Run the service/);
 
-    const published = await json(`${origin}/v1/workspaces/${workspace.id}/publish`, { method: "POST", body: { proposalId: record.proposal.id, message: "Add setup notes", branch: "agentdocs/api-test" } });
+    const published = await json(`${origin}/v1/workspaces/${workspace.id}/publish`, { method: "POST", body: { proposalId: record.proposal.id, message: "Add setup notes", branch: "agentdocs/api-test", autoPush: false } });
     assert.match(published.commitSha, /^[a-f0-9]{40}$/);
+    assert.equal(published.pushed, false);
     assert.match(execFileSync("git", ["show", "agentdocs/api-test:README.md"], { cwd: repository, encoding: "utf8" }), /## Setup/);
     const listed = await json(`${origin}/v1/workspaces`);
     assert.equal(listed[0].proposalCount, 1);

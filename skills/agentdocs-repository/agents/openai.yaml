@@ -1,0 +1,4 @@
+interface:
+  display_name: "AgentDocs Repository"
+  short_description: "Edit and publish Git-backed documentation"
+  default_prompt: "Use $agentdocs-repository to update this repository documentation safely."

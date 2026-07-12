@@ -1,0 +1,6 @@
+---
+description: AgentDocs repository onboarding, documentation editing, validation, and Git publication
+alwaysApply: true
+---
+
+Read `AGENTS.md`, `SKILLS.md`, and `skills/agentdocs-repository/SKILL.md` before documentation work. Follow the canonical skill; do not use or add an embedded LLM provider.

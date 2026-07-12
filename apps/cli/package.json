@@ -1,0 +1,9 @@
+{
+  "name": "@agentdocs/cli",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "bin": { "agentdocs": "dist/index.js" },
+  "scripts": { "build": "tsc -b", "typecheck": "tsc -b --pretty false" },
+  "dependencies": { "@agentdocs/config": "0.1.0", "@agentdocs/markdown-core": "0.1.0" }
+}

@@ -1,6 +1,18 @@
 version: 1
 docs_roots:
-  - .
+  - README.md
+  - AGENTS.md
+  - SKILLS.md
+  - CLAUDE.md
+  - SECURITY.md
+  - decisions_log.md
+  - agent_docs_spec.md
+  - docs
+  - skills
+  - .agents
+  - .claude
+  - .cursor
+  - .agentdocs
 default_write_mode: pull_request
 agents:
   context_roots:

@@ -3,6 +3,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends git ca-certific
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/api/package.json apps/api/package.json
+COPY apps/cli/package.json apps/cli/package.json
 COPY apps/web/package.json apps/web/package.json
 COPY packages/agent-runtime/package.json packages/agent-runtime/package.json
 COPY packages/change-model/package.json packages/change-model/package.json

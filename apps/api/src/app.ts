@@ -2,8 +2,8 @@ import express, { type NextFunction, type Request, type Response } from "express
 import cors from "cors";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { AgentRuntime, DeterministicModelProvider, OpenAIResponsesModelProvider, type ModelProvider, type RunEvent } from "@agentdocs/agent-runtime";
-import { changeProposalSchema, type ChangePolicy } from "@agentdocs/change-model";
+import { ProposalRuntime, type RunEvent } from "@agentdocs/agent-runtime";
+import { changeProposalSchema, evidenceRefSchema, fileOperationSchema, type ChangePolicy } from "@agentdocs/change-model";
 import { assertRepositoryAllowed, loadRepositoryConfig, type AppEnvironment } from "@agentdocs/config";
 import { LocalGitProvider } from "@agentdocs/git-provider";
 import type { GitProvider } from "@agentdocs/git-provider";
@@ -12,23 +12,23 @@ import { JsonWorkspaceStore, type StoredWorkspace } from "./store";
 
 const workspaceRequest = z.object({ repositoryPath: z.string().min(1) });
 const githubWorkspaceRequest = z.object({ owner: z.string().regex(/^[A-Za-z0-9-]+$/), repository: z.string().regex(/^[A-Za-z0-9._-]+$/), defaultBranch: z.string().default("main") });
-const runRequest = z.object({ intent: z.string().min(1).max(10_000), targetPath: z.string().min(1), instruction: z.string().min(1).max(10_000) });
-const publishRequest = z.object({ proposalId: z.string().uuid(), message: z.string().min(1).max(300), branch: z.string().regex(/^[A-Za-z0-9._/-]+$/).refine((branch) => !branch.includes("..") && !branch.startsWith("/") && !branch.endsWith("/"), "Unsafe branch name") });
+const manualEditRequest = z.object({ intent: z.string().min(1).max(10_000).default("Manual documentation edit"), content: z.string().max(2_000_000) });
+const proposalRequest = z.object({ intent: z.string().min(1).max(10_000), operations: z.array(fileOperationSchema).min(1), evidence: z.array(evidenceRefSchema).optional() });
+const publishRequest = z.object({ proposalId: z.string().uuid(), message: z.string().min(1).max(300), branch: z.string().regex(/^[A-Za-z0-9._/-]+$/).refine((branch) => !branch.includes("..") && !branch.startsWith("/") && !branch.endsWith("/"), "Unsafe branch name"), autoPush: z.boolean().default(true), targetBranch: z.string().optional() });
 const pullRequest = z.object({ proposalId: z.string().uuid(), title: z.string().min(1).max(256), body: z.string().max(20_000).default("") });
 
-export interface AppOptions { environment: AppEnvironment; store?: JsonWorkspaceStore; model?: ModelProvider; }
+export interface AppOptions { environment: AppEnvironment; store?: JsonWorkspaceStore; }
 
 export function createApp(options: AppOptions) {
   const app = express();
   const store = options.store ?? new JsonWorkspaceStore(options.environment.dataDir);
-  const model = options.model ?? createModel(options.environment);
   const githubToken = createGitHubTokenProvider(options.environment);
   app.disable("x-powered-by");
   app.use(cors({ origin: options.environment.NODE_ENV === "production" ? false : true }));
   app.use(express.json({ limit: "1mb" }));
 
   app.get("/health", async (_request, response, next) => {
-    try { await store.initialize(); response.json({ status: "ok", provider: model.kind }); } catch (error) { next(error); }
+    try { await store.initialize(); response.json({ status: "ok" }); } catch (error) { next(error); }
   });
 
   app.get("/v1/workspaces", async (_request, response, next) => {
@@ -102,14 +102,30 @@ export function createApp(options: AppOptions) {
     } catch (error) { next(error); }
   });
 
-  app.post("/v1/workspaces/:id/agent-runs", async (request, response, next) => {
+  app.put("/v1/workspaces/:id/files/*", async (request, response, next) => {
     try {
       const workspace = await requiredWorkspace(store, request.params.id);
-      const input = runRequest.parse(request.body);
-      if (!inDocsRoots(input.targetPath, workspace.config.docs_roots)) throw Object.assign(new Error("Target is outside documentation roots"), { status: 403 });
+      const input = manualEditRequest.parse(request.body);
+      const path = (request.params as Record<string, string>)["0"];
+      if (!inDocsRoots(path, workspace.config.docs_roots)) throw Object.assign(new Error("Target is outside documentation roots"), { status: 403 });
       const git = providerFor(workspace, githubToken);
       const events: RunEvent[] = [];
-      const proposal = await new AgentRuntime(git, model, toPolicy(workspace), workspace.baseSha).run(input, (event) => events.push(event));
+      const operation = (await git.listFiles(workspace.baseSha)).includes(path) ? { type: "modify" as const, path, content: input.content } : { type: "create" as const, path, content: input.content };
+      const proposal = await new ProposalRuntime(git, toPolicy(workspace), workspace.baseSha).create({ intent: input.intent, operations: [operation] }, (event) => events.push(event));
+      const diff = await git.diff(proposal);
+      workspace.proposals[proposal.id] = { proposal, events, diff, createdAt: new Date().toISOString() };
+      await store.save(workspace);
+      response.status(201).json(workspace.proposals[proposal.id]);
+    } catch (error) { next(error); }
+  });
+
+  app.post("/v1/workspaces/:id/proposals", async (request, response, next) => {
+    try {
+      const workspace = await requiredWorkspace(store, request.params.id);
+      const input = proposalRequest.parse(request.body);
+      const git = providerFor(workspace, githubToken);
+      const events: RunEvent[] = [];
+      const proposal = await new ProposalRuntime(git, toPolicy(workspace), workspace.baseSha).create(input, (event) => events.push(event));
       const diff = await git.diff(proposal);
       workspace.proposals[proposal.id] = { proposal, events, diff, createdAt: new Date().toISOString() };
       await store.save(workspace);
@@ -126,7 +142,7 @@ export function createApp(options: AppOptions) {
       if (record.published) throw Object.assign(new Error("Proposal has already been published"), { status: 409 });
       const proposal = changeProposalSchema.parse(record.proposal);
       if (Object.values(proposal.validation).includes("failed") || Object.values(proposal.validation).includes("pending")) throw Object.assign(new Error("All validations must pass before publishing"), { status: 409 });
-      record.published = await providerFor(workspace, githubToken).publish(proposal, input.message, input.branch);
+      record.published = await providerFor(workspace, githubToken).publish(proposal, input.message, input.branch, { push: input.autoPush, targetBranch: input.targetBranch });
       await store.save(workspace);
       response.status(201).json(record.published);
     } catch (error) { next(error); }
@@ -153,12 +169,6 @@ export function createApp(options: AppOptions) {
     response.status(status).json({ error: error instanceof Error ? error.message : String(error), details: error instanceof z.ZodError ? error.issues : undefined });
   });
   return app;
-}
-
-function createModel(environment: AppEnvironment): ModelProvider {
-  return environment.OPENAI_API_KEY && environment.OPENAI_MODEL
-    ? new OpenAIResponsesModelProvider({ apiKey: environment.OPENAI_API_KEY, model: environment.OPENAI_MODEL, baseUrl: environment.OPENAI_BASE_URL })
-    : new DeterministicModelProvider();
 }
 
 function createGitHubTokenProvider(environment: AppEnvironment): GitHubAppTokenProvider | undefined {

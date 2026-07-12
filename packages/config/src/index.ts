@@ -14,9 +14,6 @@ const environmentSchema = z.object({
   AGENTDOCS_SESSION_SECRET: optionalString,
   AGENTDOCS_GIT_AUTHOR_NAME: z.string().default("AgentDocs"),
   AGENTDOCS_GIT_AUTHOR_EMAIL: z.string().email().default("agentdocs@example.invalid"),
-  OPENAI_API_KEY: optionalString,
-  OPENAI_MODEL: optionalString,
-  OPENAI_BASE_URL: z.string().url().default("https://api.openai.com/v1"),
   GITHUB_APP_ID: optionalString,
   GITHUB_INSTALLATION_ID: optionalString,
   GITHUB_APP_PRIVATE_KEY: optionalString,
@@ -24,9 +21,6 @@ const environmentSchema = z.object({
   GITHUB_CLIENT_SECRET: optionalString,
   GITHUB_WEBHOOK_SECRET: optionalString
 }).superRefine((env, context) => {
-  if (Boolean(env.OPENAI_API_KEY) !== Boolean(env.OPENAI_MODEL)) {
-    context.addIssue({ code: z.ZodIssueCode.custom, message: "OPENAI_API_KEY and OPENAI_MODEL must be set together" });
-  }
   const githubAppValues = [env.GITHUB_APP_ID, env.GITHUB_INSTALLATION_ID, env.GITHUB_APP_PRIVATE_KEY];
   if (githubAppValues.some(Boolean) && !githubAppValues.every(Boolean)) context.addIssue({ code: z.ZodIssueCode.custom, message: "GITHUB_APP_ID, GITHUB_INSTALLATION_ID, and GITHUB_APP_PRIVATE_KEY must be set together" });
   if (Boolean(env.GITHUB_CLIENT_ID) !== Boolean(env.GITHUB_CLIENT_SECRET)) context.addIssue({ code: z.ZodIssueCode.custom, message: "GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET must be set together" });

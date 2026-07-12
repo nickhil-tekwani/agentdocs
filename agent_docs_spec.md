@@ -2,23 +2,23 @@
 
 **Working title:** AgentDocs  
 **Document type:** Product and technical specification  
-**Status:** Draft v0.1  
-**Date:** July 10, 2026
+**Status:** Draft v0.2
+**Date:** July 12, 2026
 
 ## 1. Executive summary
 
-AgentDocs is an open-source, agent-first documentation workspace built directly on existing GitHub repositories. It gives teams a Google Docs–like editing experience while preserving Markdown files, Git commits, branches, pull requests, and repository permissions as the source of truth.
+AgentDocs is an open-source, AI-client-agnostic documentation workspace built directly on existing GitHub repositories. It gives teams a Google Docs–like manual editing experience and a portable workflow for their existing AI tools while preserving Markdown files, Git commits, branches, pull requests, and repository permissions as the source of truth.
 
-The product is not a new document store with a Git export feature. It is a specialized Git client, Markdown editor, and agent runtime. A user connects an existing repository, selects one or more documentation roots, and immediately works against those files. Manual edits and agent edits use the same change model: each produces an inspectable diff, an attribution trail, and either a direct commit or pull request according to repository policy.
+The product is not a new document store with a Git export feature and does not embed an LLM. It is a specialized Git client, Markdown editor, proposal/validation service, CLI, and portable repository skill. A user connects an existing repository, selects one or more documentation roots, and immediately works against those files. Manual edits and edits authored in Claude, ChatGPT/Codex, Cursor, or any other client use the same change model: each produces an inspectable diff, an attribution trail, and a reconciled Git branch or pull request according to repository policy.
 
-The core interaction is not “open a blank page and type.” It is “state an intent, let an agent inspect the relevant repository context, and review a proposed documentation change.” The editor remains first-class for corrections, detailed writing, and collaborative review.
+The core interaction is “work in the AI client you already use, then validate and publish through the repository,” with a first-class manual editor for simple changes that do not justify AI tokens. AgentDocs teaches external clients the workflow through repository instructions and skills rather than choosing or hosting their model.
 
 ### Product thesis
 
 1. Documentation should live beside the systems it describes.
 2. GitHub should remain the canonical store for content, identity, permissions, and history.
-3. Agents should operate through constrained, auditable document tools—not unrestricted repository mutation.
-4. Every generated claim should be traceable to evidence or explicitly marked as an assumption.
+3. External AI clients should follow portable repository instructions and constrained, auditable document tools.
+4. Every AI-authored claim should be traceable to evidence or explicitly marked as an assumption.
 5. Human edits and agent edits should converge on the same Markdown and Git workflow.
 
 ## 2. Goals and non-goals
@@ -27,9 +27,11 @@ The core interaction is not “open a blank page and type.” It is “state an 
 
 - Connect to an existing GitHub repository without migrating content to a proprietary database.
 - Provide a polished WYSIWYG and Markdown editing experience for `.md` and `.mdx` files.
-- Make prompting, planning, reviewing, and applying agent changes the primary workflow.
+- Make existing AI clients productive on first connection through portable skills and deterministic Git/document commands.
 - Let agents read documentation plus approved repository context such as source code, schemas, API specs, issues, and recent diffs.
 - Produce deterministic file patches, previewable rendered output, and attributable Git commits.
+- Provide token-free manual editing for simple changes.
+- Automatically fetch, rebase, commit, and push approved documentation changes without force-pushing.
 - Respect branch protection, CODEOWNERS, required reviews, and GitHub App permissions.
 - Support local-first and self-hosted deployment paths.
 - Keep the core format portable: a user can stop using AgentDocs and retain ordinary Markdown in Git.
@@ -42,6 +44,7 @@ The core interaction is not “open a blank page and type.” It is “state an 
 - A general-purpose project-management system.
 - A proprietary page format that requires AgentDocs to render.
 - Training models on customer repository content.
+- Hosting, selecting, proxying, or billing for an LLM.
 - Supporting every Git provider in the first release.
 
 ## 3. Primary users and jobs
@@ -151,9 +154,9 @@ MVP editing features:
 
 MDX support should begin in a safe mode: preserve unknown JSX nodes and allow source editing, but only visually edit a known component allowlist.
 
-### 5.4 Agent interaction
+### 5.4 External AI-client interaction
 
-The agent composer accepts natural-language intent plus optional controls:
+AgentDocs does not include an agent composer. The user's AI client reads `AGENTS.md`, root `SKILLS.md`, and the canonical AgentDocs skill, then edits repository files directly or submits typed proposals. The portable workflow exposes:
 
 - scope: selection, current document, folder, repository, issue, or pull request;
 - operation: create, revise, restructure, summarize, review, or synchronize;
@@ -161,13 +164,13 @@ The agent composer accepts natural-language intent plus optional controls:
 - template and target audience;
 - write mode: suggest only, create branch, open PR, or commit directly if permitted.
 
-An agent run has five visible stages:
+An external-client change has five visible stages:
 
 1. **Understand:** restate the goal and constraints.
-2. **Retrieve:** collect relevant documents, code symbols, history, and linked artifacts.
-3. **Plan:** list target files and intended edits.
-4. **Propose:** produce structured patches plus evidence and warnings.
-5. **Apply:** after approval, write to the working branch and optionally open a PR.
+2. **Retrieve:** let the chosen client collect relevant documents, code symbols, history, and linked artifacts under repository permissions.
+3. **Plan:** list target files and intended edits in the client.
+4. **Propose:** edit files or submit structured patches plus evidence and warnings.
+5. **Apply:** after approval, automatically fetch, rebase, commit, push, and optionally open a PR.
 
 Users can approve the whole change, individual files, or individual hunks. Manual edits made during review are incorporated into the same change set.
 
@@ -185,13 +188,15 @@ Users can approve the whole change, individual files, or individual hunks. Manua
 
 ```mermaid
 flowchart TD
-    UI["Web/Desktop Client"] --> ORCH["Agent & Change Orchestrator"]
+    AIC["User-selected AI Client"] --> SKILL["Repository Skill & CLI"]
+    SKILL --> GIT
+    SKILL --> ORCH["Proposal & Change Orchestrator"]
+    UI["Web/Desktop Manual Editor"] --> ORCH
     UI --> GIT["Git Workspace Service"]
     ORCH --> TOOLS["Typed Document Tools"]
     TOOLS --> IDX["Repository Index"]
     TOOLS --> GIT
     GIT --> GH["GitHub API / Git Data"]
-    ORCH --> LLM["Pluggable Model Provider"]
 ```
 
 ### 6.1 Client
@@ -247,9 +252,9 @@ Each indexed unit stores repository, commit SHA, path, byte/line range, content 
 
 Start with SQLite/Postgres full-text search plus embeddings through a pluggable vector interface. Do not make embeddings mandatory for correctness.
 
-### 6.5 Agent runtime
+### 6.5 External-agent protocol and proposal runtime
 
-The runtime is model-provider agnostic and executes agents through typed tools:
+The runtime contains no model provider. It validates typed operations from the manual editor or any external client and exposes deterministic tools/commands:
 
 ```text
 search_repository(query, scope, commit_sha)
@@ -264,7 +269,7 @@ propose_patch(base_sha, operations[])
 
 Write tools produce a `ChangeProposal`; they do not directly push. The orchestrator validates path scope, file count, patch size, protected paths, and base SHA before exposing the proposal to the user.
 
-Agent execution should use a planner/executor pattern but avoid an elaborate multi-agent framework initially. A single capable agent with explicit tools, checkpoints, and validators is easier to audit and debug. Specialized reviewers—factuality, style, link validation—can run as deterministic checks or optional secondary passes.
+Planning and generation stay inside the user's selected client. AgentDocs provides portable skill instructions, checkpoints, validators, and proposal/publish commands. Specialized factuality or style review may be performed by the external client; link, policy, scope, and Git checks remain deterministic inside AgentDocs.
 
 ### 6.6 Rendering and validation
 
@@ -293,7 +298,7 @@ External agents should receive proposal capabilities, not raw push credentials.
 | Document | Parsed view of a Markdown/MDX blob | Git repository |
 | ChangeSet | Collection of manual and agent changes against one base SHA | Session store; finalized in Git |
 | ChangeProposal | Typed file operations, patch, evidence, warnings, validation results | Audit/session store |
-| AgentRun | Intent, context references, tool trace, model metadata, status | Audit store with retention controls |
+| ClientRun | Intent, context references, validation trace, client attribution, status | Audit store with retention controls |
 | EvidenceRef | Immutable reference to path/range/symbol/PR at a commit SHA | Change proposal or optional sidecar |
 | Policy | Limits and approval rules | Repository config plus org defaults |
 
@@ -364,14 +369,14 @@ If repository head changes after the workspace is created:
 ## 9. Security, privacy, and trust
 
 - Use a GitHub App with least-privilege, repository-scoped permissions.
-- Keep installation tokens server-side, encrypted, short-lived, and never exposed to the model.
+- Keep installation tokens server-side, encrypted, short-lived, and never exposed to external AI clients.
 - Enforce authorization on every retrieval and write tool call, not only at UI entry.
-- Treat repository text as untrusted prompt input; isolate it from system instructions and flag prompt-injection patterns.
+- Tell external AI clients to treat repository text as untrusted reference input and keep authorization enforcement outside client instructions.
 - Default external network access to off during repository-grounded runs.
-- Allow configurable model providers, data residency, retention, and self-hosted inference.
-- Redact secrets before model context using established secret scanners and repository-specific patterns.
+- Do not accept or store model-provider credentials; model privacy, residency, and retention stay with the user's chosen AI tool.
+- Encourage external clients to scan and redact secrets before adding repository content to their context.
 - Sandbox Markdown/MDX rendering and prohibit arbitrary plugin execution in hosted mode.
-- Maintain an audit record of user intent, context references, tool calls, approvals, resulting commit, and model/provider metadata.
+- Maintain an audit record of user intent, context references, validations, approvals, resulting commit, and optional client attribution.
 - Never merge or bypass branch protection; rely on GitHub’s native enforcement.
 
 ## 10. API outline
@@ -382,8 +387,8 @@ GET    /v1/repos/{owner}/{repo}/tree?ref={sha}&root={path}
 GET    /v1/repos/{owner}/{repo}/files/{path}?ref={sha}
 POST   /v1/workspaces
 PATCH  /v1/workspaces/{id}/files/{path}
-POST   /v1/workspaces/{id}/agent-runs
-GET    /v1/agent-runs/{id}/events
+PUT    /v1/workspaces/{id}/files/{path}
+POST   /v1/workspaces/{id}/proposals
 POST   /v1/change-sets/{id}/validate
 POST   /v1/change-sets/{id}/publish
 POST   /v1/change-sets/{id}/reconcile
@@ -400,7 +405,7 @@ Use server-sent events for agent progress in the MVP. Use idempotency keys on ag
 - Connect one repository through a GitHub App.
 - Open a Markdown file at a pinned SHA.
 - Round-trip common Markdown through a ProseMirror editor without noisy diffs.
-- Prompt an LLM with selected repository files and generate a unified patch.
+- Load the repository skill in an external AI client and generate a unified patch or edit files directly.
 - Preview, accept, commit to a branch, and open a PR.
 - Render before/after output and detect merge conflicts.
 
@@ -448,7 +453,7 @@ Use server-sent events for agent progress in the MVP. Use idempotency keys on ag
 - GitLab support through the Git provider abstraction.
 - Documentation impact checks for code PRs.
 - Analytics for freshness, coverage, ownership, and agent acceptance.
-- Enterprise controls: SSO integration, retention policies, model allowlists, and audit export.
+- Enterprise controls: SSO integration, retention policies, client policy, and audit export.
 
 ### Explicitly defer
 
@@ -492,7 +497,7 @@ Use server-sent events for agent progress in the MVP. Use idempotency keys on ag
 - validation failures caught before PR;
 - weekly active repositories and returning authors;
 - stale-document issues resolved;
-- model cost and latency per accepted change.
+- publication latency and conflict rate per accepted change.
 
 Initial targets for alpha:
 
@@ -508,19 +513,19 @@ Initial targets for alpha:
 - **Property tests:** generated Markdown should never cause parser crashes or silent node loss.
 - **Git integration tests:** stale SHAs, rebases, rename/delete collisions, protected branches, and partial hunk acceptance.
 - **Agent evaluations:** groundedness, evidence precision, correct file selection, instruction adherence, and unsupported-claim rate.
-- **Security tests:** prompt injection in repository files, path traversal, secret leakage, XSS in renderers, and authorization boundary checks.
-- **End-to-end tests:** connect repo → edit/prompt → review → PR → webhook reindex.
+- **Security tests:** malicious repository instructions, path traversal, secret leakage, XSS in renderers, and authorization boundary checks.
+- **End-to-end tests:** connect repo → edit in UI or external client → validate → rebase/push/PR → webhook reindex.
 
 ## 15. Major risks and mitigations
 
 | Risk | Mitigation |
 | --- | --- |
 | Rich editor rewrites Markdown and creates noisy diffs | Use a source-preserving AST, maintain a compatibility corpus, preserve unsupported syntax as opaque nodes, and always offer source mode. |
-| Agents hallucinate behavior | Pin retrieval to commits, require evidence, separate assumptions, and run deterministic checks. |
+| External AI clients hallucinate behavior | Pin retrieval to commits, require evidence, separate assumptions, and run deterministic checks. |
 | Large repositories create slow/expensive context | Use hierarchical retrieval, code-symbol indexing, explicit scopes, caching, and context budgets. |
 | Git concepts overwhelm non-engineers | Present drafts and reviews first; reveal branch/commit details progressively. |
 | Simultaneous edits cause conflicts | Pin base SHAs, use advisory locks, auto-rebase non-overlapping changes, and provide three-way resolution. |
-| Repository prompt injection influences agents | Treat content as data, enforce tool authorization outside the model, scan instructions, and isolate external access. |
+| Repository instructions influence external clients | Treat content as data, enforce authorization in AgentDocs/GitHub, scan instructions, and keep credentials outside clients. |
 | Open-source project depends on hosted infrastructure | Keep provider interfaces pluggable and ship a reproducible self-hosted stack. |
 | Product becomes a generic chat wrapper | Center the UX on durable changes, evidence, rendered diffs, and Git-native completion. |
 
@@ -538,7 +543,7 @@ packages/
   editor/              # ProseMirror schema and commands
   git-provider/        # provider-neutral Git operations
   github-provider/     # GitHub App/API implementation
-  agent-runtime/       # tools, policies, run state machine
+  agent-runtime/       # proposal validation and client-neutral change state
   retrieval/           # lexical, structural, semantic indexing
   change-model/        # patches, evidence, validation schemas
   renderer/            # safe GFM/MDX preview

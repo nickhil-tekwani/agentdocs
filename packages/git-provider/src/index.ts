@@ -9,14 +9,15 @@ import type { ChangeProposal, FileOperation } from "@agentdocs/change-model";
 const run = promisify(execFile);
 
 export interface RepositoryFile { path: string; content: string; sha: string; }
-export interface PublishResult { commitSha: string; branch: string; }
+export interface PublishOptions { push?: boolean; remote?: string; targetBranch?: string; }
+export interface PublishResult { commitSha: string; branch: string; pushed: boolean; rebasedOnto?: string; }
 
 export interface GitProvider {
   head(branch?: string): Promise<string>;
   listFiles(sha: string): Promise<string[]>;
   readFile(path: string, sha: string): Promise<RepositoryFile>;
   diff(proposal: ChangeProposal): Promise<string>;
-  publish(proposal: ChangeProposal, message: string, branch?: string): Promise<PublishResult>;
+  publish(proposal: ChangeProposal, message: string, branch?: string, options?: PublishOptions): Promise<PublishResult>;
 }
 
 export class LocalGitProvider implements GitProvider {
@@ -54,12 +55,7 @@ export class LocalGitProvider implements GitProvider {
     return patches.join("\n");
   }
 
-  async publish(proposal: ChangeProposal, message: string, branch = "agentdocs/change"): Promise<PublishResult> {
-    const currentHead = await this.head("HEAD");
-    if (currentHead !== proposal.baseSha) throw new Error(`Stale proposal: expected ${proposal.baseSha}, repository is ${currentHead}`);
-    const status = await this.git(["status", "--porcelain"]);
-    if (status) throw new Error("Repository working tree must be clean before publishing");
-
+  async publish(proposal: ChangeProposal, message: string, branch = "agentdocs/change", options: PublishOptions = {}): Promise<PublishResult> {
     const worktree = await mkdtemp(join(tmpdir(), "agentdocs-"));
     let published = false;
     try {
@@ -75,9 +71,23 @@ export class LocalGitProvider implements GitProvider {
       }
       await this.git(["add", "--all"], worktree);
       await this.git(["commit", "-m", message], worktree);
+      let rebasedOnto: string | undefined;
+      const push = options.push ?? true;
+      const remote = options.remote ?? "origin";
+      if (push) {
+        await this.git(["fetch", remote], worktree);
+        let targetBranch = options.targetBranch;
+        if (!targetBranch) {
+          try { targetBranch = (await this.git(["symbolic-ref", `refs/remotes/${remote}/HEAD`], worktree)).replace(`refs/remotes/${remote}/`, ""); }
+          catch { targetBranch = "main"; }
+        }
+        rebasedOnto = `${remote}/${targetBranch}`;
+        await this.git(["rebase", rebasedOnto], worktree);
+        await this.git(["push", "--set-upstream", remote, `HEAD:refs/heads/${branch}`], worktree);
+      }
       const commitSha = await this.git(["rev-parse", "HEAD"], worktree);
       published = true;
-      return { commitSha, branch };
+      return { commitSha, branch, pushed: push, rebasedOnto };
     } finally {
       try { await this.git(["worktree", "remove", "--force", worktree]); } catch { await rm(worktree, { recursive: true, force: true }); }
       if (!published) {

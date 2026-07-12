@@ -14,6 +14,38 @@ This file records meaningful technical and architectural decisions made by human
 
 ## Decisions
 
+### 2026-07-12 — Scaffold repositories from composable documentation modules
+
+- **Status:** Accepted
+- **Decision:** Offer `minimal`, `project`, `team`, `technical`, and `hybrid` repository presets built from named modules. Generate ordinary Markdown, AgentDocs configuration, repository instructions, templates, a canonical cross-client skill, client discovery adapters, and a scaffold manifest. Refuse overwrites by default.
+- **Why:** There is no single standard information architecture for every documentation repository. A shared core plus purpose-specific modules provides useful conventions without locking users into a proprietary structure or maintaining many divergent template copies.
+- **Alternatives and tradeoffs:** Fixed folder dumps are easier to explain but become repetitive and hard to customize. A fully interactive generator could capture more choices but is less predictable for AI clients and automation. The initial CLI favors explicit flags and deterministic output.
+- **Consequences:** Generated repositories record their preset/modules in `.agentdocs/scaffold.yml`. Users can compose structures with `--include` and `--exclude`, and potentially sensitive individual updates can be omitted. Future migrations can inspect the manifest while all content remains portable Git-backed Markdown.
+
+### 2026-07-12 — Make AgentDocs AI-client-agnostic
+
+- **Status:** Accepted; supersedes the embedded-provider portions of “Implement Phase 0 as a local Git vertical slice” and “Keep secrets in validated environment configuration”
+- **Decision:** Remove all embedded LLM providers, model selection, AI API keys, prompting, and generated placeholder prose. Treat Claude, ChatGPT/Codex, Cursor, and any other user-selected AI client as the authoring environment. Keep AgentDocs responsible for portable repository instructions, manual editing, typed proposals, validation, review, Git reconciliation, commits, and pushes.
+- **Why:** Users already have preferred AI tools with their own context, billing, privacy controls, and interaction models. Embedding another provider duplicates that surface and forces an unnecessary model choice. A Git-native protocol and skill layer lets every client operate on the same canonical documentation.
+- **Alternatives and tradeoffs:** Retaining an optional built-in model would make AgentDocs self-contained, but it would blur product responsibility and create credential/model maintenance. The client-agnostic design depends on external tools correctly reading repository instructions, so AgentDocs ships a canonical root skill plus discovery adapters and deterministic CLI commands.
+- **Consequences:** No OpenAI or other model credential is required. The browser editor covers simple token-free changes. External clients edit files directly or submit typed proposals, and publication automatically fetches, rebases, commits, and pushes without force-updating history.
+
+### 2026-07-12 — Use one canonical cross-client repository skill
+
+- **Status:** Accepted
+- **Decision:** Store the authoritative workflow in `skills/agentdocs-repository/SKILL.md`, index it from root `SKILLS.md` and `AGENTS.md`, and provide thin discovery adapters for `.agents/skills`, `.claude/skills`, `CLAUDE.md`, and `.cursor/rules`.
+- **Why:** AI clients use different discovery conventions and no single vendor-specific location is universal. One canonical file prevents behavioral drift while adapters make first connection work across common clients.
+- **Alternatives and tradeoffs:** Fully duplicated vendor skills might improve isolated discovery but would inevitably diverge. Depending only on `AGENTS.md` is more portable but cannot bundle the detailed reusable workflow or helper scripts as a skill.
+- **Consequences:** Updates belong in the canonical skill; adapters should remain pointers. Unknown clients can be onboarded by explicitly reading the three root/canonical instruction files.
+
+### 2026-07-12 — Automatically rebase and push documentation publication
+
+- **Status:** Accepted; extends “Provide local and GitHub Git publication adapters”
+- **Decision:** Make publication create a dedicated branch, commit documentation changes, fetch the remote, rebase onto its default or selected target, and push automatically. Use isolated worktrees for local repositories and replay GitHub Git Data changes onto a newer target only when upstream files do not overlap.
+- **Why:** Authors should not need to manage Git mechanics for routine documentation work, but automatic reconciliation must not overwrite concurrent edits.
+- **Alternatives and tradeoffs:** Rejecting every stale base is simpler but creates needless friction for non-overlapping changes. Force-pushing or blindly replacing overlapping files would be convenient but unsafe. True semantic conflict resolution remains explicit.
+- **Consequences:** Successful UI and CLI publication returns the pushed commit and rebase target. Overlapping updates stop with a preserved branch or conflict response for manual resolution.
+
 ### 2026-07-11 — Enforce the local verification suite in CI
 
 - **Status:** Accepted
