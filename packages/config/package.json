@@ -4,5 +4,5 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": { "build": "tsc -b", "typecheck": "tsc -b --pretty false" },
-  "dependencies": { "dotenv": "16.6.1", "yaml": "2.9.0", "zod": "3.23.8" }
+  "dependencies": { "dotenv": "17.4.2", "yaml": "2.9.0", "zod": "3.23.8" }
 }
